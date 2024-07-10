@@ -320,7 +320,7 @@ export default class Git {
 	// Gets the commit list in chronological order
 	async getCommitsToPush() {
 		const output = await execCmd(
-			`git log --format=%H --reverse ${ SKIP_PR === false ? `` : `origin/` }${ this.baseBranch }..HEAD`,
+			`git log --format=%H --reverse @{push}..`,
 			this.workingDir
 		)
 
