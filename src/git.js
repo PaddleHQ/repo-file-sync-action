@@ -166,6 +166,7 @@ export default class Git {
 		)
 
 		this.prBranch = newBranch
+		await this.getLastCommitSha()
 	}
 
 	async add(file) {
