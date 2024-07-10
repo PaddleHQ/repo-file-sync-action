@@ -134,15 +134,25 @@ export default class Git {
 
 		if (OVERWRITE_EXISTING_PR === false) {
 			newBranch += `-${ Math.round((new Date()).getTime() / 1000) }`
-		}
+		} else {
+			await execCmd(
+				`git remote set-branches origin '*'`,
+				this.workingDir
+			)
 
-		core.debug(`Creating PR Branch ${ newBranch }`)
+			await execCmd(
+				`git fetch -v --depth=1`,
+				this.workingDir
+			)
+		}
 
 		const output = await execCmd(
 			`git branch -r`,
 			this.workingDir
 		)
 		core.info(output)
+
+		core.debug(`Creating PR Branch ${ newBranch }`)
 
 		await execCmd(
 			`git checkout "${ newBranch }" 2>/dev/null || git checkout -b "${ newBranch }"`,
