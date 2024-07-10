@@ -138,10 +138,12 @@ export default class Git {
 
 		core.debug(`Creating PR Branch ${ newBranch }`)
 
-		await execCmd(
-			`git fetch`,
+		const output = await execCmd(
+			`git checkout "${ newBranch }"`,
 			this.workingDir
 		)
+
+		core.info(output)
 
 		await execCmd(
 			`git checkout "${ newBranch }" 2>/dev/null || git checkout -b "${ newBranch }"`,
