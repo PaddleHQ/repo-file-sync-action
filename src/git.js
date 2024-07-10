@@ -146,18 +146,6 @@ export default class Git {
 			)
 		}
 
-		const output = await execCmd(
-			`git branch -r`,
-			this.workingDir
-		)
-		core.info(output)
-
-		const co = await execCmd(
-			`git checkout "${ newBranch }"`,
-			this.workingDir
-		)
-		core.info(co)
-
 		core.debug(`Creating PR Branch ${ newBranch }`)
 
 		await execCmd(
@@ -332,9 +320,6 @@ export default class Git {
 		)
 
 		const commits = output.split('\n')
-
-		core.debug(`Commits to push: ${ commits.join(', ') }`)
-
 		return commits
 	}
 
