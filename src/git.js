@@ -144,11 +144,6 @@ export default class Git {
 				this.workingDir
 			)
 
-			await execCmd(
-				`git branch --set-upstream-to origin/"${ newBranch }"`,
-				this.workingDir
-			)
-
 			return
 		}
 
@@ -166,11 +161,6 @@ export default class Git {
 
 		await execCmd(
 			`git switch "${ newBranch }" 2>/dev/null || git switch -c "${ newBranch }"`,
-			this.workingDir
-		)
-
-		await execCmd(
-			`git branch --set-upstream-to origin/"${ newBranch }"`,
 			this.workingDir
 		)
 
@@ -336,7 +326,7 @@ export default class Git {
 	// Gets the commit list in chronological order
 	async getCommitsToPush() {
 		const output = await execCmd(
-			`git log --format=%H --reverse @{push}..`,
+			`git log --format=%H --reverse ${ this.lastCommitSha }..HEAD`,
 			this.workingDir
 		)
 
