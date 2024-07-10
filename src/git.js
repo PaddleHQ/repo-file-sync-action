@@ -433,7 +433,7 @@ export default class Git {
 		`)
 
 		if (this.existingPr) {
-			core.info(`Overwriting existing PR`)
+			core.info(`Updating existing PR`)
 
 			const { data } = await this.github.pulls.update({
 				owner: this.repo.user,
