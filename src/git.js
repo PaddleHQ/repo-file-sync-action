@@ -139,7 +139,12 @@ export default class Git {
 		core.debug(`Creating PR Branch ${ newBranch }`)
 
 		await execCmd(
-			`git checkout -b "${ newBranch }"`,
+			`git fetch`,
+			this.workingDir
+		)
+
+		await execCmd(
+			`git checkout "${ newBranch }" 2>/dev/null || git checkout -b "${ newBranch }"`,
 			this.workingDir
 		)
 
@@ -366,7 +371,7 @@ export default class Git {
 	async push() {
 		if (FORK) {
 			return execCmd(
-				`git push -u fork ${ this.prBranch } --force`,
+				`git push -u fork ${ this.prBranch } --force-with-lease`,
 				this.workingDir
 			)
 		}
@@ -374,7 +379,7 @@ export default class Git {
 			return await this.createGithubVerifiedCommits()
 		}
 		return execCmd(
-			`git push ${ this.gitUrl } --force`,
+			`git push ${ this.gitUrl } --force-with-lease`,
 			this.workingDir
 		)
 	}
