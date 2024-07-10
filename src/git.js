@@ -346,7 +346,7 @@ export default class Git {
 
 	// A wrapper for running all the flow to generate all the pending commits using the GitHub API
 	async createGithubVerifiedCommits() {
-		core.debug(`Creating Commits using GitHub API`)
+		core.debug(`Creating commits using GitHub API`)
 		const commits = await this.getCommitsToPush()
 
 		if (SKIP_PR === false) {
