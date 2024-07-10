@@ -160,7 +160,7 @@ export default class Git {
 		)
 
 		await execCmd(
-			`git switch "${ newBranch }" 2>/dev/null || git switch -b "${ newBranch }"`,
+			`git switch "${ newBranch }" 2>/dev/null || git switch -c "${ newBranch }"`,
 			this.workingDir
 		)
 
