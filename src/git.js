@@ -131,30 +131,41 @@ export default class Git {
 		const prefix = BRANCH_PREFIX.replace('SOURCE_REPO_NAME', GITHUB_REPOSITORY.split('/')[1])
 
 		let newBranch = path.join(prefix, this.repo.branch).replace(/\\/g, '/').replace(/\/\./g, '/')
+		this.prBranch = newBranch
 
 		if (OVERWRITE_EXISTING_PR === false) {
 			newBranch += `-${ Math.round((new Date()).getTime() / 1000) }`
-		} else {
+			this.prBranch = newBranch
+
+			core.debug(`Creating PR Branch ${ newBranch }`)
+
 			await execCmd(
-				`git remote set-branches origin '*'`,
+				`git checkout -b "${ newBranch }"`,
 				this.workingDir
 			)
 
-			await execCmd(
-				`git fetch -v --depth=1`,
-				this.workingDir
-			)
+			return
 		}
 
-		core.debug(`Creating PR Branch ${ newBranch }`)
+		core.debug(`Switch/Create PR Branch ${ newBranch }`)
 
 		await execCmd(
-			`git checkout "${ newBranch }" 2>/dev/null || git checkout -b "${ newBranch }"`,
+			`git remote set-branches origin '*'`,
 			this.workingDir
 		)
 
-		this.prBranch = newBranch
+		await execCmd(
+			`git fetch -v --depth=1`,
+			this.workingDir
+		)
+
+		await execCmd(
+			`git switch "${ newBranch }" 2>/dev/null || git switch -b "${ newBranch }"`,
+			this.workingDir
+		)
+
 		await this.getLastCommitSha()
+
 	}
 
 	async add(file) {
