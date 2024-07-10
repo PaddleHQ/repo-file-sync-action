@@ -145,7 +145,7 @@ export default class Git {
 			)
 
 			await execCmd(
-				`git branch --set-upstream "${ newBranch }" origin/"${ newBranch }"`,
+				`git branch --set-upstream-to origin/"${ newBranch }"`,
 				this.workingDir
 			)
 
@@ -170,7 +170,7 @@ export default class Git {
 		)
 
 		await execCmd(
-			`git branch --set-upstream "${ newBranch }" origin/"${ newBranch }"`,
+			`git branch --set-upstream-to origin/"${ newBranch }"`,
 			this.workingDir
 		)
 
