@@ -119,6 +119,11 @@ try {
 			type: 'boolean',
 			default: false
 		}),
+		DELETE_ORPHANED: getInput({
+			key: 'DELETE_ORPHANED',
+			type: 'boolean',
+			default: false
+		}),
 		BRANCH_PREFIX: getInput({
 			key: 'BRANCH_PREFIX',
 			default: 'repo-sync/SOURCE_REPO_NAME'
