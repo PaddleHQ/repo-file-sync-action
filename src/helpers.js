@@ -83,10 +83,6 @@ export async function copy(src, dest, isDirectory, file) {
 
 	const filterFunc = (srcFile, destFile) => {
 		core.debug(`Filtering file ${ srcFile } to ${ destFile }`)
-		if (fs.existsSync(srcFile) && fs.lstatSync(srcFile).isDirectory()) {
-			core.debug(`Source Directory ${ srcFile } is being copied`)
-			return true
-		}
 		if (file.replace === false) {
 			// Directories are always copied
 			if (fs.lstatSync(destFile).isDirectory()) {
