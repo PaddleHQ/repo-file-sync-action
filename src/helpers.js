@@ -85,7 +85,7 @@ export async function copy(src, dest, isDirectory, file) {
 
 		if (file.replace === false) {
 			if (fs.existsSync(destFile)) {
-				core.debug(`File ${ destFile } already exists and 'replace' option is set to false`)
+				core.info(`File ${ destFile } already exists and 'replace' option is set to false`)
 				return false
 			}
 		}
