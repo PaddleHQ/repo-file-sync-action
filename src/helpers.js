@@ -85,10 +85,16 @@ export async function copy(src, dest, isDirectory, file) {
 		core.debug(`Filtering file ${ srcFile } to ${ destFile }`)
 		if (file.replace === false) {
 			// Directories are always copied
-			if (fs.lstatSync(destFile).isDirectory()) {
-				core.debug(`Dest File ${ destFile } already exists and is a directory`)
+			try {
+				if (fs.lstatSync(destFile).isDirectory()) {
+					core.debug(`Dest File ${ destFile } already exists and is a directory`)
+					return true
+				}
+			} catch (error) {
+				core.debug(`Dest File ${ destFile } does not exist`)
 				return true
 			}
+
 			if (fs.existsSync(destFile)) {
 				core.info(`File ${ destFile } already exists and 'replace' option is set to false`)
 				return false
