@@ -82,7 +82,7 @@ export async function copy(src, dest, isDirectory, file) {
 	const exclude = file.exclude
 
 	const filterFunc = (srcFile, destFile) => {
-
+		core.info(`Filtering file ${ srcFile } to ${ destFile }`)
 		if (file.replace === false) {
 			if (fs.existsSync(destFile)) {
 				core.info(`File ${ destFile } already exists and 'replace' option is set to false`)
