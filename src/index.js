@@ -80,8 +80,6 @@ async function run() {
 				} else {
 					isDirectory = await pathIsDirectory(file.source)
 
-					if (destExists === true && file.replace === false) return core.warning(`File(s) already exist(s) in destination and 'replace' option is set to false`)
-
 					const source = isDirectory ? `${ addTrailingSlash(file.source) }` : file.source
 					const dest = isDirectory ? `${ addTrailingSlash(localDestination) }` : localDestination
 

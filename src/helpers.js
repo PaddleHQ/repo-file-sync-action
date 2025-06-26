@@ -81,30 +81,37 @@ export async function copy(src, dest, isDirectory, file) {
 	const deleteOrphaned = isDirectory && file.deleteOrphaned
 	const exclude = file.exclude
 
-	const filterFunc = (file) => {
+	const filterFunc = (srcFile, destFile) => {
+
+		if (file.replace === false) {
+			if (fs.existsSync(destFile)) {
+				core.debug(`File ${ destFile } already exists and 'replace' option is set to false`)
+				return false
+			}
+		}
 
 		if (exclude !== undefined) {
 
 			// Check if file-path is one of the present filepaths in the excluded paths
 			// This has presedence over the single file, and therefore returns before the single file check
 			let filePath = ''
-			if (file.endsWith('/')) {
+			if (srcFile.endsWith('/')) {
 				// File item is a folder
-				filePath = file
+				filePath = srcFile
 			} else {
 				// File item is a file
-				filePath = file.split('\/').slice(0, -1).join('/') + '/'
+				filePath = srcFile.split('\/').slice(0, -1).join('/') + '/'
 			}
 
 			if (exclude.includes(filePath)) {
-				core.debug(`Excluding file ${ file } since its path is included as one of the excluded paths.`)
+				core.debug(`Excluding file ${ srcFile } since its path is included as one of the excluded paths.`)
 				return false
 			}
 
 
 			// Or if the file itself is in the excluded files
-			if (exclude.includes(file)) {
-				core.debug(`Excluding file ${ file } since it is explicitly added in the exclusion list.`)
+			if (exclude.includes(srcFile)) {
+				core.debug(`Excluding file ${ srcFile } since it is explicitly added in the exclusion list.`)
 				return false
 			}
 		}
