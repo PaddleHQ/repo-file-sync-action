@@ -91,12 +91,12 @@ export async function copy(src, dest, isDirectory, file) {
 					return true
 				}
 			} catch (error) {
-				core.debug(`Dest File ${ destFile } does not exist`)
+				core.debug(`Destination file or directory ${ destFile } does not exist`)
 				return true
 			}
 
 			if (fs.existsSync(destFile)) {
-				core.info(`File ${ destFile } already exists and 'replace' option is set to false`)
+				core.debug(`File ${ destFile } already exists and 'replace' option is set to false`)
 				return false
 			}
 		}
