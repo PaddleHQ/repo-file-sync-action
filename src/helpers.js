@@ -82,15 +82,15 @@ export async function copy(src, dest, isDirectory, file) {
 	const exclude = file.exclude
 
 	const filterFunc = (srcFile, destFile) => {
-		core.info(`Filtering file ${ srcFile } to ${ destFile }`)
+		core.debug(`Filtering file ${ srcFile } to ${ destFile }`)
 		if (fs.existsSync(srcFile) && fs.lstatSync(srcFile).isDirectory()) {
-			core.info(`Source Directory ${ srcFile } is being copied`)
+			core.debug(`Source Directory ${ srcFile } is being copied`)
 			return true
 		}
 		if (file.replace === false) {
 			// Directories are always copied
 			if (fs.lstatSync(destFile).isDirectory()) {
-				core.info(`Dest File ${ destFile } already exists and is a directory`)
+				core.debug(`Dest File ${ destFile } already exists and is a directory`)
 				return true
 			}
 			if (fs.existsSync(destFile)) {
