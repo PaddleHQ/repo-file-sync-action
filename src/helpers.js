@@ -126,6 +126,32 @@ export async function copy(src, dest, isDirectory, file) {
 				return false
 			}
 		}
+
+		// Check if the file matches any of the excludeFilePatterns
+		if (file.excludeFilePatterns.length > 0) {
+			for (const pattern of file.excludeFilePatterns) {
+				if (srcFile.match(pattern)) {
+					core.debug(`Excluding file ${ srcFile } since it matches the excludeFilePattern ${ pattern }.`)
+					return false
+				}
+			}
+		}
+
+		// Check if the file matches any of the includeFilePatterns
+		if (file.includeFilePatterns.length > 0) {
+			let matches = false
+			for (const pattern of file.includeFilePatterns) {
+				if (srcFile.match(pattern)) {
+					matches = true
+					break
+				}
+			}
+
+			if (!matches) {
+				core.debug(`Excluding file ${ srcFile } since it does not match any of the includeFilePatterns.`)
+				return false
+			}
+		}
 		return true
 	}
 
