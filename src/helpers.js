@@ -174,7 +174,7 @@ export async function copy(src, dest, isDirectory, file) {
 		}
 	} else {
 		core.debug(`Copy ${ src } to ${ dest }`)
-		await fs.copy(src, dest,{ filter: filterFunc })
+		await fs.copy(src, dest, { filter: filterFunc })
 	}
 
 

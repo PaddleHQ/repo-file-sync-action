@@ -513,6 +513,29 @@ This is your custom PR Body
 This PR was created automatically by the repo-file-sync-action workflow run xxx.
 ```
 
+### Use a custom branch name per group
+
+You can specify a custom branch name for each group of files. This is useful if you want to sync different files to 
+different branches in the same repository.
+
+```yaml
+group:
+  - files:
+      - source: A.txt
+    branchSuffix: a
+    repos: |
+      https://custom.host/user/repo
+
+  - files:
+      - source: B.txt
+    branchSuffix: b
+    repos: |
+      https://custom.host/user/repo
+```
+
+This will create two branches in the target repository: `repo-sync/SOURCE_REPO_NAME/a` and 
+`repo-sync/SOURCE_REPO_NAME/b`.
+
 ### Fork and pull request workflow
 
 If you do not wish to grant this action write access to target repositories, you can specify a bot/user Github acccount that you do have access to with the `FORK` parameter. 
