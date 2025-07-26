@@ -42,6 +42,10 @@ try {
 			key: 'CONFIG_PATH',
 			default: '.github/sync.yml'
 		}),
+		INLINE_CONFIG: getInput({
+			key: 'INLINE_CONFIG',
+			default: ''
+		}),
 		IS_FINE_GRAINED: getInput({
 			key: 'IS_FINE_GRAINED',
 			default: false
@@ -207,9 +211,15 @@ const parseFiles = (files) => {
 }
 
 export async function parseConfig() {
-	const fileContent = await fs.promises.readFile(context.CONFIG_PATH)
+	let configObject
 
-	const configObject = yaml.load(fileContent.toString())
+	if (context.INLINE_CONFIG) {
+		configObject = yaml.load(context.INLINE_CONFIG)
+	} else {
+		const fileContent = await fs.promises.readFile(context.CONFIG_PATH)
+
+		configObject = yaml.load(fileContent.toString())
+	}
 
 	const result = {}
 
