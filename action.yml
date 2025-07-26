@@ -15,6 +15,10 @@ inputs:
     description: | 
       The path for the sync configuration file
     required: false
+  INLINE_CONFIG:
+    description: | 
+      The config provided inline as a YAML object. This will override the CONFIG_PATH if both are provided.
+    required: false
   IS_FINE_GRAINED: 
     description: |
       Label GH_PAT as a fine grained token
