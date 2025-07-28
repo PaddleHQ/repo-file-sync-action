@@ -145,6 +145,20 @@ user/repo2@develop:
   - path/to/file2.txt
 ```
 
+Alternatively for simple, or dynamic configurations you can use the `INLINE_CONFIG` to define the configuration inline in the workflow file:
+
+```yml
+  - name: Run GitHub File Sync
+    uses: BetaHuhn/repo-file-sync-action@v1
+    with:
+      GH_PAT: ${{ secrets.GH_PAT }}
+      INLINE_CONFIG: |
+        user/repo:
+          - path/to/file.txt
+        user/repo2@develop:
+          - path/to/file2.txt
+```
+
 There are multiple ways to specify which files to sync to each individual repository.
 
 ### List individual file(s)
