@@ -7,7 +7,12 @@ jobs:
   releaseScheduler:
     runs-on: ubuntu-latest
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: audit
+
       - name: Run release-scheduler
-        uses: koj-co/release-scheduler@master
+        uses: koj-co/release-scheduler@c70ce29fbd1120532891e6b8efeca52d56ecc9e3 # master
         env:
           GH_PAT: ${{ secrets.GH_PAT }}

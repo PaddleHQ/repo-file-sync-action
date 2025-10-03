@@ -2,13 +2,23 @@ name: Tag CI
 on:
   release:
     types: [published, edited]
+permissions:
+  contents: read
+
 jobs:
   latest:
+    permissions:
+      contents: write  # for Actions-R-Us/actions-tagger to create a release and add latest tag
     name: Latest
     runs-on: windows-latest
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: audit
+
       - name: Update latest tag
-        uses: Actions-R-Us/actions-tagger@latest
+        uses: Actions-R-Us/actions-tagger@330ddfac760021349fef7ff62b372f2f691c20fb # latest
         env:
           GITHUB_TOKEN: "${{ secrets.GH_PAT }}"
         with:
