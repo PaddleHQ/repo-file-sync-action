@@ -215,24 +215,36 @@ export async function parseConfig() {
 
 	if (context.INLINE_CONFIG) {
 		configObject = yaml.load(context.INLINE_CONFIG)
+		if (configObject === null) {
+			core.warning('Warn: No config object found')
+			return []
+		}
 	} else {
 		const fileContent = await fs.promises.readFile(context.CONFIG_PATH)
 
+		core.debug(fileContent.toString())
 		configObject = yaml.load(fileContent.toString())
+		if (configObject === null) {
+			core.warning('Warn: No config object found')
+			return []
+		}
 	}
 
 	const result = {}
 
 	Object.keys(configObject).forEach((key) => {
+		core.debug(`Key: ${ key }`)
 		if (key === 'group') {
 			const rawObject = configObject[key]
 
 			const groups = Array.isArray(rawObject) ? rawObject : [ rawObject ]
 
 			groups.forEach((group) => {
+				core.debug(`Group: ${ JSON.stringify(group) }`)
 				const repos = typeof group.repos === 'string' ? group.repos.split('\n').map((n) => n.trim()).filter((n) => n) : group.repos
 
 				repos.forEach((name) => {
+					core.debug(`Name: ${ name }`)
 					const files = parseFiles(group.files)
 					const repo = parseRepoName(name)
 
