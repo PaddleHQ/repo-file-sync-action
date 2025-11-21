@@ -33,10 +33,10 @@ async function run() {
 
 	await forEach(repos, async (item) => {
 		core.info(`Repository Info`)
-		core.info(`Slug		: ${ item.repo.name }`)
-		core.info(`Owner		: ${ item.repo.user }`)
-		core.info(`Https Url	: https://${ item.repo.fullName }`)
-		core.info(`Branch		: ${ item.repo.branch }`)
+		core.info(`Target Repo		: ${ item.repo.user }/${ item.repo.name }`)
+		core.info(`Target Url		: https://${ item.repo.fullName }`)
+		core.info(`Source Branch		: ${ item.repo.branch }`)
+		core.info(`Target Branch Suffix	: ${ item.branchSuffix || 'n/a' }`)
 		core.info('	')
 		try {
 
