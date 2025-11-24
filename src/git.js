@@ -77,6 +77,15 @@ export default class Git {
 		}
 	}
 
+	async cleanupRepo(repo) {
+		this.workingDir = path.join(TMP_DIR, repo.uniqueName)
+
+		core.debug(`Cleaning up working directory ${ this.workingDir }`)
+		return execCmd(
+            `rm -rf ${ this.workingDir }`
+		)
+	}
+
 	async createFork() {
 		core.debug(`Creating fork with OWNER: ${ this.repo.user } and REPO: ${ this.repo.name }`)
 		await this.github.repos.createFork({
@@ -96,7 +105,7 @@ export default class Git {
 		core.debug(`Cloning ${ this.repo.fullName } into ${ this.workingDir }`)
 
 		return execCmd(
-			`test -e ${ this.workingDir } || git clone --depth 1 ${ this.repo.branch !== 'default' ? '--branch "' + this.repo.branch + '"' : '' } ${ this.gitUrl } ${ this.workingDir }`
+			`git clone --depth 1 ${ this.repo.branch !== 'default' ? '--branch "' + this.repo.branch + '"' : '' } ${ this.gitUrl } ${ this.workingDir }`
 		)
 	}
 
