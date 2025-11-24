@@ -235,15 +235,18 @@ export async function parseConfig() {
 				repos.forEach((name) => {
 					const files = parseFiles(group.files)
 					const repo = parseRepoName(name)
+					const branchSuffix = group.branchSuffix || 'default'
+					const key = `${ repo.uniqueName }|${ branchSuffix }`
 
-					if (result[repo.uniqueName] !== undefined) {
-						result[repo.uniqueName].files.push(...files)
+					if (result[key] !== undefined) {
+						result[key].files.push(...files)
 						return
 					}
 
-					result[repo.uniqueName] = {
+					result[key] = {
 						repo,
-						files
+						files,
+						branchSuffix: group.branchSuffix || ''
 					}
 				})
 			})
