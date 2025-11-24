@@ -132,6 +132,8 @@ async function run() {
 				core.debug('Git Status:')
 				core.debug(await git.status())
 
+				await git.cleanupRepo(item.repo)
+
 				return
 			}
 
@@ -142,6 +144,8 @@ async function run() {
 				core.info('File(s) already up to date')
 
 				if (existingPr) await git.removePrWarning()
+
+				await git.cleanupRepo(item.repo)
 
 				return
 			}
@@ -206,6 +210,8 @@ async function run() {
 					await git.addPrTeamReviewers(TEAM_REVIEWERS)
 				}
 			}
+
+			await git.cleanupRepo(item.repo)
 
 			core.info('	')
 		} catch (err) {
