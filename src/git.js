@@ -140,9 +140,9 @@ export default class Git {
 		const prefix = BRANCH_PREFIX.replace('SOURCE_REPO_NAME', GITHUB_REPOSITORY.split('/')[1])
 
 		let newBranch = path.join(prefix, this.repo.branch).replace(/\\/g, '/').replace(/\/\./g, '/')
-		this.prBranch = newBranch
-
 		newBranch += branchSuffix ? `-${ branchSuffix }` : ''
+
+		this.prBranch = newBranch
 
 		if (OVERWRITE_EXISTING_PR === false) {
 			newBranch += `-${ Math.round((new Date()).getTime() / 1000) }`
