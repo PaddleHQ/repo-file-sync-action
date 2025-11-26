@@ -1,15 +1,15 @@
 version: 2
-updates:
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "daily"
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "daily"
 
+updates:
   - package-ecosystem: npm
-    directory: /dist
+    directory: /
     schedule:
-      interval: daily
+      interval: "weekly"
+      day: "wednesday"
+      time: "08:00"
+    labels:
+      - "release:patch"
+    groups:
+      npm:
+        patterns:
+          - "*"
