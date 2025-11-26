@@ -10,7 +10,6 @@ nunjucks.configure({ autoescape: true, trimBlocks: true, lstripBlocks: true })
 // From https://github.com/toniov/p-iteration/blob/master/lib/static-methods.js - MIT © Antonio V
 export async function forEach(array, callback) {
 	for (let index = 0; index < array.length; index++) {
-		// eslint-disable-next-line callback-return
 		await callback(array[index], index, array)
 	}
 }
@@ -22,7 +21,6 @@ export function dedent(templateStrings, ...values) {
 	strings[strings.length - 1] = strings[strings.length - 1].replace(/\r?\n([\t ]*)$/, '')
 	for (let i = 0; i < strings.length; i++) {
 		let match
-		// eslint-disable-next-line no-cond-assign
 		if (match = strings[i].match(/\n[\t ]+/g)) {
 			matches.push(...match)
 		}
