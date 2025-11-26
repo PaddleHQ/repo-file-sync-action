@@ -20,7 +20,8 @@ const {
 	COMMIT_AS_PR_TITLE,
 	FORK,
 	REVIEWERS,
-	TEAM_REVIEWERS
+	TEAM_REVIEWERS,
+	GITHUB_REPOSITORY
 } = config
 
 async function run() {
@@ -185,7 +186,19 @@ async function run() {
 				`)
 
 				const useCommitAsPRTitle = COMMIT_AS_PR_TITLE && modified.length === 1 && modified[0].useOriginalMessage
-				const pullRequest = await git.createOrUpdatePr(COMMIT_EACH_FILE ? changedFiles : '', useCommitAsPRTitle ? modified[0].commitMessage.split('\n', 1)[0].trim() : undefined)
+
+				let title
+				if (useCommitAsPRTitle) {
+					title = modified[0].commitMessage.split('\n', 1)[0].trim()
+				} else {
+					title = `${ COMMIT_PREFIX } synced file(s) with ${ GITHUB_REPOSITORY }`
+				}
+
+				if (item.branchSuffix !== '') {
+					title += ` [${ item.branchSuffix }] `
+				}
+
+				const pullRequest = await git.createOrUpdatePr(COMMIT_EACH_FILE ? changedFiles : '', title)
 
 				core.notice(`Pull Request #${ pullRequest.number } created/updated: ${ pullRequest.html_url }`)
 				prUrls.push(pullRequest.html_url)
