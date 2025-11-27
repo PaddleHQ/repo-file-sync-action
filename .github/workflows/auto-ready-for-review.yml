@@ -10,21 +10,22 @@ on:
       pr_number:
         # This is used to fetch the PR to determine if it is ready for review
         # It is safe as an input
-        description: "Number of the pull request"
+        description: 'Number of the pull request'
         required: true
         type: string
       head_sha:
         # This is used to fetch the code for allcheckspassed to work
         # It is safe as an input
-        description: "Head SHA of the pull request"
+        description: 'Head SHA of the pull request'
         required: true
         type: string
       workflow:
         # This is used to wait for the workflow to complete before running further actions
         # It is safe as an input
-        description: "Name of the workflow that triggered this action"
+        description: 'Name of the workflow that triggered this action'
         required: false
         type: string
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.inputs.pr_number }}
@@ -36,6 +37,7 @@ permissions:
   pull-requests: write # required for `auto-ready-for-review` to mark the PR as ready for review
 
 jobs:
+
   auto_ready_for_review:
     name: "AutoReady for Review"
     runs-on: ubuntu-latest
@@ -58,18 +60,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          set -euo pipefail
-          pr_json="$(gh pr view ${{ inputs.pr_number }} --json isDraft,labels)"
-          is_draft="$(echo "$pr_json" | jq -r '.isDraft')"
-          has_label="$(echo "$pr_json" | jq -r '.labels | map(.name) | index("auto-ready-for-review") | if . == null then "false" else "true" end')"
+            set -euo pipefail
+            pr_json="$(gh pr view ${{ inputs.pr_number }} --json isDraft,labels)"
+            is_draft="$(echo "$pr_json" | jq -r '.isDraft')"
+            has_label="$(echo "$pr_json" | jq -r '.labels | map(.name) | index("auto-ready-for-review") | if . == null then "false" else "true" end')"
 
-          # set ok=true if is_draft is true and has_label is true
-          if [ "$is_draft" = "true" ] && [ "$has_label" = "true" ]; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
+            # set ok=true if is_draft is true and has_label is true
+            if [ "$is_draft" = "true" ] && [ "$has_label" = "true" ]; then
+              echo "ok=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "ok=false" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
 
       - name: "⏳ Wait for calling workflow to be ready"
         if: |-
@@ -78,7 +80,7 @@ jobs:
         uses: wechuli/allcheckspassed@f423b273f5fdf73582e41f8f6f0f204d69c27379 # v2.1.0
         id: check-caller
         with:
-          delay: "0"
+          delay: '0'
           poll: true
           verbose: true
           commit_sha: ${{ inputs.head_sha }}
@@ -91,7 +93,7 @@ jobs:
         uses: wechuli/allcheckspassed@f423b273f5fdf73582e41f8f6f0f204d69c27379 # v2.1.0
         id: check-all
         with:
-          delay: "0"
+          delay: '0'
           verbose: true
           poll: false
           commit_sha: ${{ inputs.head_sha }}
