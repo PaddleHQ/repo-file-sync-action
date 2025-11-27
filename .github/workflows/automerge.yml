@@ -11,15 +11,16 @@ on:
       pr_number:
         # This is used to fetch the PR to determine if it is safe to merge
         # It is safe as an input
-        description: "Number of the pull request"
+        description: 'Number of the pull request'
         required: true
         type: string
       workflow:
         # This is used to wait for the workflow to complete before running further actions
         # It is safe as an input
-        description: "Name of the workflow that triggered this action"
+        description: 'Name of the workflow that triggered this action'
         required: false
         type: string
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.inputs.pr_number }}
@@ -95,6 +96,7 @@ jobs:
       head_ref: ${{ steps.pr-info.outputs.head_ref }}
       merge_base: ${{ steps.merge-base.outputs.merge_base }}
 
+
   # --
   # Wait for the PR to be ready for automerge
   wait_for_ready:
@@ -133,7 +135,7 @@ jobs:
         id: check-caller
         continue-on-error: true
         with:
-          delay: "0"
+          delay: '0'
           poll: true
           checks_include: ${{ github.event.inputs.workflow }}
 
@@ -145,7 +147,7 @@ jobs:
         id: check-all
         continue-on-error: true
         with:
-          delay: "0"
+          delay: '0'
           poll: false
           checks_exclude: \[Automerge\/.*\].*
 
