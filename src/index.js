@@ -194,7 +194,7 @@ async function run() {
 					title = `${ COMMIT_PREFIX } synced file(s) with ${ GITHUB_REPOSITORY }`
 				}
 
-				if (item.branchSuffix !== '') {
+				if (item.branchSuffix !== undefined && item.branchSuffix !== '') {
 					title += ` [${ item.branchSuffix }] `
 				}
 
