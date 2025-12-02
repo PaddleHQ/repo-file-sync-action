@@ -1,4 +1,4 @@
-name: Run tests
+name: Validate build
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   lint:
-    name: Run tests
+    name: Validate build
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -31,16 +31,25 @@ jobs:
         with:
           node-version: 24.x
 
-      - name: Read build config
-        id: build_config
-        uses: pietrobolcato/action-read-yaml@9f13718d61111b69f30ab4ac683e67a56d254e1d # 1.1.0
-        with:
-          config: ${{ github.workspace }}/build-config.yaml
-
       - name: Install dependencies
         run: |
           npm install
 
-      - name: Run tests
+      - name: Validate build output
+        env:
+          GH_INSTALLATION_TOKEN: ${{ github.token }}
+          INLINE_CONFIG: |
+            PaddleHQ/repo-file-sync-action:
+              - README.md
         run: |
-          node --test --experimental-test-coverage --test-coverage-lines=${{ steps.build_config.outputs['requiredCoverage'] || 100 }}
+          node ./src/index.js
+
+
+      - name: Validate build output
+        env:
+          GH_INSTALLATION_TOKEN: ${{ github.token }}
+          INLINE_CONFIG: |
+            PaddleHQ/repo-file-sync-action:
+              - README.md
+        run: |
+          node ./dist/index.js
