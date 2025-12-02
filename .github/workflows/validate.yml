@@ -35,7 +35,7 @@ jobs:
         run: |
           npm install
 
-      - name: Validate build output
+      - name: Validate source
         env:
           GH_INSTALLATION_TOKEN: ${{ github.token }}
           INLINE_CONFIG: |
@@ -44,8 +44,7 @@ jobs:
         run: |
           node ./src/index.js
 
-
-      - name: Validate build output
+      - name: Validate dist
         env:
           GH_INSTALLATION_TOKEN: ${{ github.token }}
           INLINE_CONFIG: |
