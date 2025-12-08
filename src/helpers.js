@@ -47,7 +47,7 @@ export function execCmd(command, workingDir, trimResult = true) {
 			command,
 			{
 				cwd: workingDir,
-				maxBuffer: 1024 * 1024 * 4
+				maxBuffer: 1024 * 1024 * 20
 			},
 			function(error, stdout) {
 				error ? reject(error) : resolve(
