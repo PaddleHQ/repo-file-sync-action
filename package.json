@@ -28,20 +28,20 @@
   },
   "homepage": "https://github.com/marketplace/actions/repo-file-sync-action",
   "dependencies": {
-    "@actions/core": "^1.11.1",
+    "@actions/core": "^2.0.1",
     "@actions/github": "^6.0.1",
     "@octokit/plugin-throttling": "^11.0.3",
     "@putout/git-status-porcelain": "^3.0.0",
     "action-input-parser": "^1.2.38",
-    "fs-extra": "^11.3.2",
+    "fs-extra": "^11.3.3",
     "js-yaml": "^4.1.1",
-    "node-readfiles": "0.2.0",
+    "node-readfiles": "0.3.1",
     "nunjucks": "^3.2.4"
   },
   "devDependencies": {
     "@betahuhn/config": "^1.2.0",
     "@octokit/core": "^7.0.6",
     "@vercel/ncc": "^0.38.4",
-    "eslint": "^9.39.1"
+    "eslint": "^9.39.2"
   }
 }
