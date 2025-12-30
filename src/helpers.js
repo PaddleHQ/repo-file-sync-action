@@ -158,6 +158,8 @@ export async function copy(src, dest, isDirectory, file) {
 
 			const srcFileList = await walk(src)
 			for (const srcFile of srcFileList) {
+				core.debug(`Checking source file: ${ srcFile }`)
+
 				if (!filterFunc(srcFile)) { continue }
 
 				const srcPath = path.join(src, srcFile)
@@ -177,11 +179,12 @@ export async function copy(src, dest, isDirectory, file) {
 
 	// If it is a directory and deleteOrphaned is enabled - check if there are any files that were removed from source dir and remove them in destination dir
 	if (deleteOrphaned) {
-
 		const srcFileList = await walk(src)
 		const destFileList = await walk(dest)
 
 		for (const destFile of destFileList) {
+			core.debug(`Checking destination file: ${ destFile }`)
+
 			if (destFile.startsWith('.git')) return
 			if (srcFileList.indexOf(destFile) === -1) {
 				const filePath = path.join(dest, destFile)
