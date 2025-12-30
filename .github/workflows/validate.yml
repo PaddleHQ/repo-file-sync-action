@@ -38,6 +38,7 @@ jobs:
       - name: Validate source
         env:
           GH_INSTALLATION_TOKEN: ${{ github.token }}
+          DELETE_ORPHANED: true
           INLINE_CONFIG: |
             PaddleHQ/repo-file-sync-action:
               - README.md
@@ -47,6 +48,7 @@ jobs:
       - name: Validate dist
         env:
           GH_INSTALLATION_TOKEN: ${{ github.token }}
+          DELETE_ORPHANED: true
           INLINE_CONFIG: |
             PaddleHQ/repo-file-sync-action:
               - README.md
