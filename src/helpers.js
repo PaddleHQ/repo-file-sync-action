@@ -1,5 +1,4 @@
 import fs from 'fs-extra'
-import readfiles from 'node-readfiles'
 import { exec } from 'child_process'
 import * as core from '@actions/core'
 import * as path from 'path'
@@ -157,7 +156,7 @@ export async function copy(src, dest, isDirectory, file) {
 		if (isDirectory) {
 			core.debug(`Render all files in directory ${ src } to ${ dest }`)
 
-			const srcFileList = await readfiles(src, { readContents: false, hidden: true })
+			const srcFileList = await walk(src)
 			for (const srcFile of srcFileList) {
 				if (!filterFunc(srcFile)) { continue }
 
@@ -179,8 +178,8 @@ export async function copy(src, dest, isDirectory, file) {
 	// If it is a directory and deleteOrphaned is enabled - check if there are any files that were removed from source dir and remove them in destination dir
 	if (deleteOrphaned) {
 
-		const srcFileList = await readfiles(src, { readContents: false, hidden: true })
-		const destFileList = await readfiles(dest, { readContents: false, hidden: true })
+		const srcFileList = await walk(src)
+		const destFileList = await walk(dest)
 
 		for (const destFile of destFileList) {
 			if (destFile.startsWith('.git')) return
@@ -208,4 +207,14 @@ export async function remove(src) {
 
 export function arrayEquals(array1, array2) {
 	return Array.isArray(array1) && Array.isArray(array2) && array1.length === array2.length && array1.every((value, i) => value === array2[i])
+}
+
+async function walk(dir, fileList = []) {
+	const files = await fs.readdir(dir)
+	for (const file of files) {
+		const stat = await fs.stat(path.join(dir, file))
+		if (stat.isDirectory()) fileList = await walk(path.join(dir, file), fileList)
+		else fileList.push(path.join(dir, file))
+	}
+	return fileList
 }
