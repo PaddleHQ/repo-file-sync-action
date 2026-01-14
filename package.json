@@ -28,8 +28,8 @@
   },
   "homepage": "https://github.com/marketplace/actions/repo-file-sync-action",
   "dependencies": {
-    "@actions/core": "^2.0.1",
-    "@actions/github": "^6.0.1",
+    "@actions/core": "^2.0.2",
+    "@actions/github": "^7.0.0",
     "@octokit/plugin-throttling": "^11.0.3",
     "@putout/git-status-porcelain": "^3.0.0",
     "action-input-parser": "^1.2.38",
