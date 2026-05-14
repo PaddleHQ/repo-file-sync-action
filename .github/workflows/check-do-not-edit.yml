@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  actions: write # required for `workflow-dispatch` to trigger the automerge workflow
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
@@ -18,7 +19,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
         with:
           egress-policy: audit
 
@@ -29,11 +30,11 @@ jobs:
           exit 0
 
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 0 # fetch all history to allow diff
 
       - name: Check for DO NOT EDIT warnings
         shell: bash
@@ -79,3 +80,31 @@ jobs:
           else
             echo "No DO NOT EDIT warnings found in changed files."
           fi
+
+      - name: Automerge
+        uses: ./.github/actions/trigger-automerge
+        with:
+          event: ${{ toJSON(github.event) }}
+          hasAutoApproverPrivateKey: ${{ secrets.AUTO_APPROVER_PRIVATE_KEY != '' }}
+
+  otel_cicd_export:
+    name: OpenTelemetry Export Trace
+    if: always()
+    needs: [check-do-not-edit]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+
+      - name: Export workflow trace
+        uses: step-security/otel-cicd-action@867b2182ace9682deea2e7c31712596e02e72644 # v4.0.1
+        continue-on-error: true
+        with:
+          otlpEndpoint: grpc://api.honeycomb.io:443/
+          otlpHeaders: "x-honeycomb-team=${{ secrets.HONEYCOMB_GHA_SECRET }},x-honeycomb-dataset=${{ vars.HONEYCOMB_GHA_DATASET }}"
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
