@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   push_markdown_job:
-    runs-on: go-4-core
+    runs-on: go-2-core
     timeout-minutes: 10
     name: Push Markdown to Notion
     steps:
