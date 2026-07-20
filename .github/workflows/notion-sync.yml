@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   push_markdown_job:
-    runs-on: go-2-core
+    runs-on: generic-2-core
     timeout-minutes: 10
     name: Push Markdown to Notion
     steps:
@@ -51,7 +51,7 @@ jobs:
     name: OpenTelemetry Export Trace
     if: always()
     needs: [push_markdown_job]
-    runs-on: go-2-core
+    runs-on: generic-2-core
     timeout-minutes: 5
     permissions:
       contents: read
