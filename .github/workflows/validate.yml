@@ -9,6 +9,7 @@ concurrency:
 
 permissions:
   contents: write # the self-sync test below pushes a branch to this repo
+  pull-requests: write # ...and opens a PR for that branch
 
 jobs:
   lint:
