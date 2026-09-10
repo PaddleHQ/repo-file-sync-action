@@ -127,7 +127,7 @@ Here are all the inputs [repo-file-sync-action](https://github.com/BetaHuhn/repo
 | `SKIP_CLEANUP` | Skips removing the temporary directory. Useful for debugging | **No** | false |
 | `SKIP_PR` | Skips creating a Pull Request and pushes directly to the default branch | **No** | false |
 | `FORK` | A Github account username. Changes will be pushed to a fork of target repos on this account. | **No** | false |
-| `AUTOMERGE` | Enable GitHub's native auto-merge on each created/updated pull request. Requires "Allow auto-merge" to be turned on in the target repo's settings; if it isn't, this logs a warning instead of failing the sync. | **No** | true |
+| `AUTOMERGE` | Enable GitHub's native auto-merge on each created/updated pull request. Requires "Allow auto-merge" to be turned on in the target repo's settings; if it isn't, this logs a warning instead of failing the sync. | **No** | false |
 | `AUTOMERGE_METHOD` | Merge method to request when `AUTOMERGE` is enabled: `merge`, `squash`, or `rebase` | **No** | squash |
 
 ### Outputs
