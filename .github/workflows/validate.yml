@@ -8,7 +8,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write # the self-sync test below pushes a branch to this repo
 
 jobs:
   lint:
