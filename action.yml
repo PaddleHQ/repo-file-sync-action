@@ -105,7 +105,7 @@ inputs:
       Enable GitHub's native auto-merge on each created/updated pull request, so it merges itself
       once required reviews and status checks pass. Requires "Allow auto-merge" to be turned on in
       the target repo's settings; if it isn't, this is logged as a warning rather than failing the
-      sync. Defaults to true.
+      sync. Defaults to false — callers opt in explicitly.
     required: false
   AUTOMERGE_METHOD:
     description: |

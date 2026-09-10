@@ -140,7 +140,7 @@ try {
 		AUTOMERGE: getInput({
 			key: 'AUTOMERGE',
 			type: 'boolean',
-			default: true
+			default: false
 		}),
 		AUTOMERGE_METHOD: getInput({
 			key: 'AUTOMERGE_METHOD',
