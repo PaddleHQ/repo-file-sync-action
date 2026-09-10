@@ -136,6 +136,15 @@ try {
 			key: 'FORK',
 			default: false,
 			disableable: true
+		}),
+		AUTOMERGE: getInput({
+			key: 'AUTOMERGE',
+			type: 'boolean',
+			default: true
+		}),
+		AUTOMERGE_METHOD: getInput({
+			key: 'AUTOMERGE_METHOD',
+			default: 'squash'
 		})
 	}
 
