@@ -15,7 +15,6 @@ on:
 
 permissions:
   contents: read # Read access to the repository contents is required to read the Markdown files.
-  actions: write # required for `workflow-dispatch` to trigger the automerge workflow
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
@@ -26,6 +25,9 @@ jobs:
     runs-on: generic-2-core
     timeout-minutes: 10
     name: Push Markdown to Notion
+    permissions:
+      contents: read
+      actions: write # required for `workflow-dispatch` to trigger the automerge workflow
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
