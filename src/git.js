@@ -1,8 +1,6 @@
 import { parse } from '@putout/git-status-porcelain'
 import * as core from '@actions/core'
 import * as github from '@actions/github'
-import { GitHub, getOctokitOptions } from '@actions/github/lib/utils.js'
-import { throttling } from '@octokit/plugin-throttling'
 import * as path from 'path'
 
 import config from './config.js'
@@ -22,35 +20,20 @@ const {
 	SKIP_PR,
 	PR_BODY,
 	BRANCH_PREFIX,
-	FORK
+	FORK,
+	MAX_RETRIES
 } = config
 
-import { dedent, execCmd, execCmdBuffer } from './helpers.js'
+import { dedent, execCmd, execCmdBuffer, repoWorkingDir } from './helpers.js'
+import { withRetry } from './retry.js'
 
 export default class Git {
-	constructor() {
-		const Octokit = GitHub.plugin(throttling)
-
-		const options = getOctokitOptions(GITHUB_TOKEN, {
-			baseUrl: process.env.GITHUB_API_URL || 'https://api.github.com',
-			throttle: {
-				onRateLimit: (retryAfter) => {
-					core.debug(`Hit GitHub API rate limit, retrying after ${ retryAfter }s`)
-					return true
-				},
-				onSecondaryRateLimit: (retryAfter) => {
-					core.debug(`Hit secondary GitHub API rate limit, retrying after ${ retryAfter }s`)
-					return true
-				}
-			}
-		})
-
-		const octokit = new Octokit(options)
-
-		// We only need the rest client, plus graphql for enablePullRequestAutoMerge
-		// (auto-merge has no REST endpoint).
-		this.github = octokit.rest
-		this.graphql = octokit.graphql
+	// Shared client keeps all API calls on one throttle queue; dirDiscriminator
+	// keeps working dirs distinct when the same repo runs concurrently.
+	constructor(client, dirDiscriminator = '') {
+		this.github = client.rest
+		this.graphql = client.graphql
+		this.dirDiscriminator = dirDiscriminator
 	}
 
 	async initRepo(repo) {
@@ -61,11 +44,13 @@ export default class Git {
 
 		// Set values to current repo
 		this.repo = repo
-		this.workingDir = path.join(TMP_DIR, repo.uniqueName)
+		this.workingDir = repoWorkingDir(TMP_DIR, repo.uniqueName, this.dirDiscriminator)
 		this.gitUrl = `https://${ IS_INSTALLATION_TOKEN ? 'x-access-token:' : '' }${ IS_FINE_GRAINED ? 'oauth:' : '' }${ GITHUB_TOKEN }@${ repo.fullName }.git`
 
-        await this.cleanupRepo(repo)
-		await this.clone()
+		await withRetry(async () => {
+			await this.cleanupRepo(repo)
+			await this.clone()
+		}, { retries: MAX_RETRIES })
 		await this.setIdentity()
 		await this.getBaseBranch()
 		await this.getLastCommitSha()
@@ -81,7 +66,7 @@ export default class Git {
 	}
 
 	async cleanupRepo(repo) {
-		this.workingDir = path.join(TMP_DIR, repo.uniqueName)
+		this.workingDir = repoWorkingDir(TMP_DIR, repo.uniqueName, this.dirDiscriminator)
 
 		core.debug(`Cleaning up working directory ${ this.workingDir }`)
 		return execCmd(
@@ -409,18 +394,18 @@ export default class Git {
 
 	async push() {
 		if (FORK) {
-			return execCmd(
+			return withRetry(() => execCmd(
 				`git push -u fork ${ this.prBranch } --force-with-lease`,
 				this.workingDir
-			)
+			), { retries: MAX_RETRIES })
 		}
 		if (IS_INSTALLATION_TOKEN) {
 			return await this.createGithubVerifiedCommits()
 		}
-		return execCmd(
+		return withRetry(() => execCmd(
 			`git push ${ this.gitUrl } --force-with-lease`,
 			this.workingDir
-		)
+		), { retries: MAX_RETRIES })
 	}
 
 	async findExistingPr() {

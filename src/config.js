@@ -145,6 +145,16 @@ try {
 		AUTOMERGE_METHOD: getInput({
 			key: 'AUTOMERGE_METHOD',
 			default: 'squash'
+		}),
+		CONCURRENCY: getInput({
+			key: 'CONCURRENCY',
+			type: 'number',
+			default: 1
+		}),
+		MAX_RETRIES: getInput({
+			key: 'MAX_RETRIES',
+			type: 'number',
+			default: 3
 		})
 	}
 
