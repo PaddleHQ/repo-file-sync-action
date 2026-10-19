@@ -36,18 +36,60 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'release:patch')
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - name: Create release based on label
+        id: release
         uses: step-security/release-on-push-action@b9dee0685e99e905fe90cba8ba9ed92c7f3806b4 # v0.28.6
         with:
-          bump_version_scheme: norelease
+          # On a PR the action looks up labels via the merge commit, which belongs to no
+          # PR, so the bump is passed in from the PR's own label instead.
+          bump_version_scheme: >-
+            ${{ (github.event_name != 'pull_request' && 'norelease')
+              || (contains(github.event.pull_request.labels.*.name, 'release:major') && 'major')
+              || (contains(github.event.pull_request.labels.*.name, 'release:minor') && 'minor')
+              || 'patch' }}
           use_github_release_notes: true
           dry_run: ${{ format('refs/heads/{0}', github.event.repository.default_branch) != github.ref }}
+
+  comment_release:
+    name: Comment release on merged PR
+    needs: [release_on_push]
+    if: github.event_name == 'push' && needs.release_on_push.outputs.tag_name != ''
+    runs-on: generic-2-core
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Find merged PR
+        id: pr
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          retries: 3
+          result-encoding: string
+          script: |
+            // Rebased stacked PRs also contain the merge commit, so match on merge_commit_sha.
+            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              ...context.repo, commit_sha: context.sha,
+            });
+            return prs.find((p) => p.merge_commit_sha === context.sha)?.number ?? '';
+
+      - name: Comment release link
+        if: steps.pr.outputs.result != ''
+        uses: step-security/actions-comment-pull-request@60cd38988a354b2d22b47612fb02a20e822d6048 # v3.0.2
+        with:
+          comment-tag: release
+          mode: upsert
+          pr-number: ${{ steps.pr.outputs.result }}
+          message: |
+            Released in [${{ needs.release_on_push.outputs.tag_name }}](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.release_on_push.outputs.tag_name }}).
 
   otel_cicd_export:
     name: OpenTelemetry Export Trace
     if: always() && needs.release_on_push.result != 'skipped'
-    needs: [release_on_push]
+    needs: [release_on_push, comment_release]
     runs-on: generic-2-core
     timeout-minutes: 5
     permissions:
