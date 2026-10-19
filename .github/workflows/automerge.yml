@@ -1,7 +1,8 @@
 # DO NOT EDIT: This file should only be modified in the `go-library-template` repo.
 
 # This workflow automatically approves and merges safe pull requests created by Dependabot, or automatic PRs from
-# api-specifications, paddle-config and go-library-template repositories.
+# api-specifications, paddle-config and go-library-template repositories, or from sources a repo lists under
+# `automergeSources` in its build-config.yaml.
 
 name: Auto Approve and Merge
 
@@ -96,10 +97,13 @@ jobs:
           # Emitted as a multiline output so downstream gate jobs can do
           # their scope check against a shared file list (single source of
           # truth for `git diff --name-only`).
+          # Random delimiter so no file name can end the list early; --no-renames so
+          # a rename's source path is listed and checked too.
+          DELIM="EOF_$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
           {
-            echo 'files<<EOF'
-            git diff --name-only "${MERGE_BASE}"
-            echo 'EOF'
+            echo "files<<${DELIM}"
+            git diff --name-only --no-renames "${MERGE_BASE}"
+            echo "${DELIM}"
           } >> "$GITHUB_OUTPUT"
 
     outputs:
@@ -108,6 +112,7 @@ jobs:
       user_login: ${{ steps.pr-info.outputs.user_login }}
       labels: ${{ steps.pr-info.outputs.labels }}
       head_sha: ${{ steps.pr-info.outputs.head_sha }}
+      base_ref: ${{ steps.pr-info.outputs.base_ref }}
       merge_base: ${{ steps.merge-base.outputs.merge_base }}
       changed_files: ${{ steps.changed.outputs.files }}
 
@@ -296,12 +301,13 @@ jobs:
             -e '^\.github/release\.yml$'
             -e '^\.github/actionlint\.yaml$'
             -e '^tool-versions\.json$'
+            -e '^\.claude/rules/paddle-go-conventions\.md$'
           )
           if [ -n "${CHANGED_FILES}" ] && ! echo "${CHANGED_FILES}" | grep -qvE "${ALLOWED[@]}"; then
             echo "✅ Only safe template files modified (workflows/dependabot) - automerge enabled"
             echo "can_automerge=true" >> "$GITHUB_OUTPUT"
           else
-            REASON="Updates to files outside the safe template allow-list (\`.github/actions\`, \`.github/workflows\`, \`.github/dependabot.yml\`, \`.github/pull_request_template.md\`, \`.github/release.yml\`, \`.github/actionlint.yaml\`, \`tool-versions.json\`) — manual review required."
+            REASON="Updates to files outside the safe template allow-list (\`.github/actions\`, \`.github/workflows\`, \`.github/dependabot.yml\`, \`.github/pull_request_template.md\`, \`.github/release.yml\`, \`.github/actionlint.yaml\`, \`tool-versions.json\`, \`.claude/rules/paddle-go-conventions.md\`) — manual review required."
             echo "⚠️ ${REASON}"
             echo "reason=${REASON}" >> "$GITHUB_OUTPUT"
           fi
@@ -569,6 +575,129 @@ jobs:
     outputs:
       can_automerge: ${{ steps.check-files.outputs.can_automerge }}
 
+  # Config-driven gate: each repo lists, under `automergeSources` in its
+  # build-config.yaml, which bot author + `origin:<x>` label pairs may
+  # auto-merge and exactly which files each may touch.
+  check_automerge_sources:
+    name: "[Automerge/Check] 🗂️ Check configured automerge sources"
+    needs:
+      - pr_info
+    runs-on: generic-2-core
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+
+    if: |-
+      needs.pr_info.outputs.state == 'OPEN' &&
+      startsWith(needs.pr_info.outputs.user_login, 'app/') &&
+      contains(needs.pr_info.outputs.labels, 'origin:')
+
+    steps:
+      - name: "📥 Checkout PR Code"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.pr_info.outputs.head_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      # Read the policy from the base branch tip, not the PR tree or merge base:
+      # a PR must not widen its own allow-list or predate a narrowing of it.
+      - name: "📌 Pin Build Configuration to the Base Branch"
+        env:
+          BASE_REF: ${{ needs.pr_info.outputs.base_ref }}
+        run: |
+          git show "origin/${BASE_REF}:build-config.yaml" > "${RUNNER_TEMP}/build-config.base.yaml" \
+            || : > "${RUNNER_TEMP}/build-config.base.yaml"
+
+      - name: "🔍 Validate changed files against configured automerge sources"
+        id: check
+        env:
+          CHANGED_FILES: ${{ needs.pr_info.outputs.changed_files }}
+          LABELS: ${{ needs.pr_info.outputs.labels }}
+          USER_LOGIN: ${{ needs.pr_info.outputs.user_login }}
+        run: |
+          set -o pipefail # a malformed policy must fail, not read as "no policy"
+          if ! command -v yq >/dev/null 2>&1; then
+            echo "❌ yq not found on runner - cannot evaluate automerge policy"
+            exit 1
+          fi
+
+          ORIGINS=$(printf '%s\n' "${LABELS}" | tr ',' '\n' | sed -n 's/^origin://p')
+          if [ "$(printf '%s\n' "${ORIGINS}" | grep -c .)" -ne 1 ]; then
+            echo "ℹ️ Expected exactly one origin:* label - not this gate's responsibility"
+            exit 0
+          fi
+          ORIGIN="${ORIGINS}"
+
+          MATCH=$(yq -o=json '.automergeSources // []' "${RUNNER_TEMP}/build-config.base.yaml" \
+            | jq -c --arg o "${ORIGIN}" --arg a "${USER_LOGIN}" \
+              'map(select(.origin == $o and .author == $a)) | .[0] // empty')
+          if [ -z "${MATCH}" ]; then
+            echo "ℹ️ No automerge policy for origin '${ORIGIN}' by '${USER_LOGIN}' - not this gate's responsibility"
+            exit 0
+          fi
+          echo "owned=true" >> "$GITHUB_OUTPUT"
+
+          EXACT=$(printf '%s' "${MATCH}" | jq -r '.allowedFiles // [] | .[]')
+          PATTERNS=$(printf '%s' "${MATCH}" | jq -r '.allowedFilePatterns // [] | .[]')
+
+          DENIED=""
+          if [ -z "$(printf '%s' "${CHANGED_FILES}" | tr -d '[:space:]')" ]; then
+            DENIED="(no changed files)"$'\n'
+          fi
+
+          # One grep per pattern: an invalid regex then denies rather than
+          # failing open, as a single `grep -f ... || true` would.
+          while IFS= read -r f; do
+            [ -z "${f}" ] && continue
+            if printf '%s\n' "${EXACT}" | grep -qxF -e "${f}"; then
+              continue
+            fi
+            ok=0
+            while IFS= read -r p; do
+              [ -z "${p}" ] && continue
+              printf '%s\n' "${f}" | grep -qxE -e "${p}" && { ok=1; break; }
+            done <<< "${PATTERNS}"
+            [ "${ok}" -eq 0 ] && DENIED="${DENIED}${f}"$'\n'
+          done <<< "${CHANGED_FILES}"
+
+          if [ -n "${DENIED}" ]; then
+            REASON="Changed file(s) outside the \`automergeSources\` allow-list for origin \`${ORIGIN}\` — manual review required."
+            echo "⚠️ ${REASON}"
+            printf '%s' "${DENIED}"
+            # Random delimiter: DENIED holds PR-controlled file names, and one
+            # named like a fixed delimiter could inject outputs.
+            DELIM="EOF_$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+            {
+              echo "reason<<${DELIM}"
+              echo "${REASON}"
+              echo ''
+              echo '```'
+              printf '%s' "${DENIED}"
+              echo '```'
+              echo "${DELIM}"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "✅ All changed files permitted for origin '${ORIGIN}' - automerge enabled"
+          echo "can_automerge=true" >> "$GITHUB_OUTPUT"
+
+      # Only when this gate owns the origin: an empty reason deletes the shared
+      # status comment another gate may have just posted.
+      - name: "💬 Manage Automerge Status Comment"
+        if: steps.check.outputs.owned == 'true'
+        uses: ./.github/actions/automerge-skipped-comment
+        with:
+          pr_number: ${{ github.event.inputs.pr_number }}
+          check_name: "Check configured automerge sources"
+          reason: ${{ steps.check.outputs.reason }}
+          github_token: ${{ github.token }}
+
+    outputs:
+      can_automerge: ${{ steps.check.outputs.can_automerge }}
+
   # --
   # If automerge is enabled then approve and merge the PR
 
@@ -589,6 +718,7 @@ jobs:
       - check_paddle_config_changes
       - check_api_specifications_changes
       - check_renovate_changes
+      - check_automerge_sources
 
     # Run if any of the check jobs approved automerge
     # always() ensures this is a `or` condition and does not depend on ALL the checks passing, but only one.
@@ -604,7 +734,8 @@ jobs:
         needs.check_coding_standards_changes.outputs.can_automerge == 'true' ||
         needs.check_paddle_config_changes.outputs.can_automerge == 'true' ||
         needs.check_api_specifications_changes.outputs.can_automerge == 'true' ||
-        needs.check_renovate_changes.outputs.can_automerge == 'true'
+        needs.check_renovate_changes.outputs.can_automerge == 'true' ||
+        needs.check_automerge_sources.outputs.can_automerge == 'true'
       )
 
     steps:
@@ -697,7 +828,7 @@ jobs:
   otel_cicd_export:
     name: OpenTelemetry Export Trace
     if: ${{ !cancelled() }}
-    needs: [pr_info, check_dependabot_go_deps, check_dependabot_action_refs, check_library_template_changes, check_coding_standards_changes, check_paddle_config_changes, check_api_specifications_changes, check_renovate_changes, automerge]
+    needs: [pr_info, check_dependabot_go_deps, check_dependabot_action_refs, check_library_template_changes, check_coding_standards_changes, check_paddle_config_changes, check_api_specifications_changes, check_renovate_changes, check_automerge_sources, automerge]
     runs-on: generic-2-core
     timeout-minutes: 5
     permissions:
