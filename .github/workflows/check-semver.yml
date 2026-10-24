@@ -1,5 +1,3 @@
-# DO NOT EDIT: This file should only be modified in the `go-library-template` repo.
-
 name: Ensure SemVer Label is added
 
 on:
@@ -16,7 +14,6 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
-  actions: write # required for `workflow-dispatch` to trigger the automerge workflow
 
 env:
   VALID_SEMVER_LABELS: norelease,release:major,release:minor,release:patch
@@ -70,12 +67,6 @@ jobs:
             if (semverLabels.length > 1) {
               core.setFailed("You must only add one SemVer label to this PR");
             }
-
-      - name: Automerge
-        uses: ./.github/actions/trigger-automerge
-        with:
-          event: ${{ toJSON(github.event) }}
-          hasAutoApproverPrivateKey: ${{ secrets.AUTO_APPROVER_PRIVATE_KEY != '' }}
 
   otel_cicd_export:
     name: OpenTelemetry Export Trace
