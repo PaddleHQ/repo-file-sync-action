@@ -57,6 +57,26 @@ export function execCmd(command, workingDir, trimResult = true) {
 	})
 }
 
+// Same as execCmd, but resolves the raw stdout Buffer instead of decoding it as UTF-8 text.
+// Needed for commands whose output may be binary (e.g. `git cat-file -p <blob>`), where a
+// text decode would corrupt bytes that aren't valid UTF-8.
+export function execCmdBuffer(command, workingDir) {
+	core.debug(`EXEC: "${ command }" IN ${ workingDir }`)
+	return new Promise((resolve, reject) => {
+		exec(
+			command,
+			{
+				cwd: workingDir,
+				encoding: 'buffer',
+				maxBuffer: 1024 * 1024 * 20
+			},
+			function(error, stdout) {
+				error ? reject(error) : resolve(stdout)
+			}
+		)
+	})
+}
+
 export function addTrailingSlash(str) {
 	return str.endsWith('/') ? str : str + '/'
 }

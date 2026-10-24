@@ -21,7 +21,9 @@ const {
 	FORK,
 	REVIEWERS,
 	TEAM_REVIEWERS,
-	GITHUB_REPOSITORY
+	GITHUB_REPOSITORY,
+	AUTOMERGE,
+	AUTOMERGE_METHOD
 } = config
 
 async function run() {
@@ -221,6 +223,11 @@ async function run() {
 				if (TEAM_REVIEWERS !== undefined && TEAM_REVIEWERS.length > 0 && !FORK) {
 					core.info(`Adding team reviewer(s) "${ TEAM_REVIEWERS.join(', ') }" to PR`)
 					await git.addPrTeamReviewers(TEAM_REVIEWERS)
+				}
+
+				if (AUTOMERGE && !FORK) {
+					core.info(`Enabling auto-merge (${ AUTOMERGE_METHOD }) on PR`)
+					await git.enableAutoMerge(AUTOMERGE_METHOD)
 				}
 			}
 

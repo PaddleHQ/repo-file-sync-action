@@ -25,7 +25,7 @@ const {
 	FORK
 } = config
 
-import { dedent, execCmd } from './helpers.js'
+import { dedent, execCmd, execCmdBuffer } from './helpers.js'
 
 export default class Git {
 	constructor() {
@@ -47,8 +47,10 @@ export default class Git {
 
 		const octokit = new Octokit(options)
 
-		// We only need the rest client
+		// We only need the rest client, plus graphql for enablePullRequestAutoMerge
+		// (auto-merge has no REST endpoint).
 		this.github = octokit.rest
+		this.graphql = octokit.graphql
 	}
 
 	async initRepo(repo) {
@@ -327,17 +329,16 @@ export default class Git {
 	// Creates the blob objects in GitHub for the files that are not in the previous commit only
 	async uploadGitHubBlob(blob) {
 		core.debug(`Uploading GitHub Blob for blob ${ blob }`)
-		const fileContent = await execCmd(
+		const fileContent = await execCmdBuffer(
 			`git cat-file -p ${ blob }`,
-			this.workingDir,
-			false
+			this.workingDir
 		)
 
 		// Creates the blob. We don't need to store the response because the local sha is the same and we can use it to reference the blob
 		return this.github.git.createBlob({
 			owner: this.repo.user,
 			repo: this.repo.name,
-			content: Buffer.from(fileContent).toString('base64'),
+			content: fileContent.toString('base64'),
 			encoding: 'base64'
 		})
 	}
@@ -498,6 +499,29 @@ export default class Git {
 		this.existingPr = data
 
 		return data
+	}
+
+	async enableAutoMerge(mergeMethod) {
+		// Non-fatal: a repo without "Allow auto-merge" enabled just keeps needing
+		// a manual merge rather than failing the whole sync run.
+		try {
+			await this.graphql(`
+				mutation($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
+					enablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId, mergeMethod: $mergeMethod }) {
+						pullRequest {
+							autoMergeRequest {
+								enabledAt
+							}
+						}
+					}
+				}
+			`, {
+				pullRequestId: this.existingPr.node_id,
+				mergeMethod: mergeMethod.toUpperCase()
+			})
+		} catch (err) {
+			core.warning(`Could not enable auto-merge on PR #${ this.existingPr.number }: ${ err.message }`)
+		}
 	}
 
 	async addPrLabels(labels) {
