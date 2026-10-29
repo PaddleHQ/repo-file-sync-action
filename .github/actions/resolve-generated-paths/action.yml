@@ -1,5 +1,3 @@
-# DO NOT EDIT: This file should only be modified in the `go-library-template` repo.
-
 name: Resolve generated paths
 description: |
   Merge the baseline generated-paths patterns (shipped with this action) with

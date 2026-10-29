@@ -1,5 +1,3 @@
-# DO NOT EDIT - synced from go-library-template
-#
 # Patterns (gitignore-style) for generated or boilerplate files that should be
 # excluded from code-size metrics: PR size labelling, test coverage filtering,
 # and any line-of-code tracking.
