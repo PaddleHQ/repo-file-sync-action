@@ -67,6 +67,31 @@ jobs:
             echo "base_ref=$(echo "${PR}" | jq -r '.baseRefName')"
           } >> "$GITHUB_OUTPUT"
 
+      # While repositories move to changecontrol-service, it merges where the agentic-merge flag is on, so this
+      # workflow mustn't. Without the client-side ID, or if LaunchDarkly can't be reached, it runs as before.
+      - name: "🤖 Check whether agentic merge owns this repository"
+        id: agentic-merge
+        env:
+          LD_CLIENT_SIDE_ID: ${{ secrets.LAUNCHDARKLY_CENTRAL_CLIENT_SIDE_ID }}
+        run: |
+          MODE=off
+          if [ -n "${LD_CLIENT_SIDE_ID}" ]; then
+            # The teams on the default branch's last `*` line of CODEOWNERS, so the flag can be targeted by team.
+            OWNERS=$(cat .github/CODEOWNERS 2>/dev/null \
+              | sed 's/#.*//' | awk '$1 == "*" { line = $0 } END { print line }' \
+              | tr -s ' \t' '\n' | sed -n 's|^@[^/]*/||p' | tr '[:upper:]' '[:lower:]' \
+              | jq -Rnc '[inputs | select(length > 0)]')
+            # The context changecontrol-service evaluates the flag with.
+            CONTEXT=$(jq -cn --arg key "${GITHUB_REPOSITORY}" --argjson owners "${OWNERS:-[]}" \
+              '{kind: "repository", key: $key} + (if $owners == [] then {} else {owners: $owners} end)' \
+              | base64 -w0 | tr '+/' '-_' | tr -d '=')
+            MODE=$(curl -sf --max-time 5 \
+              "https://clientsdk.launchdarkly.com/sdk/evalx/${LD_CLIENT_SIDE_ID}/contexts/${CONTEXT}" \
+              | jq -r '."agentic-merge".value // "off"') || MODE=off
+          fi
+          echo "agentic-merge is ${MODE:-off} for ${GITHUB_REPOSITORY}"
+          echo "mode=${MODE:-off}" >> "$GITHUB_OUTPUT"
+
       # Every job checks out this commit rather than the head branch, which the
       # merge deletes; it also pins all gates to the commit state was read from.
       - name: "📥 Checkout PR Code"
@@ -115,6 +140,7 @@ jobs:
       base_ref: ${{ steps.pr-info.outputs.base_ref }}
       merge_base: ${{ steps.merge-base.outputs.merge_base }}
       changed_files: ${{ steps.changed.outputs.files }}
+      agentic_merge: ${{ steps.agentic-merge.outputs.mode }}
 
 
   # --
@@ -727,7 +753,8 @@ jobs:
     if: |-
       always() &&
       needs.pr_info.outputs.state == 'OPEN' &&
-      needs.pr_info.outputs.draft == 'false' && (
+      needs.pr_info.outputs.draft == 'false' &&
+      needs.pr_info.outputs.agentic_merge != 'on' && (
         needs.check_dependabot_go_deps.outputs.can_automerge == 'true' ||
         needs.check_dependabot_action_refs.outputs.can_automerge == 'true' ||
         needs.check_library_template_changes.outputs.can_automerge == 'true' ||
