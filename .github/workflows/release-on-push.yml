@@ -37,10 +37,51 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     outputs:
-      tag_name: ${{ steps.release.outputs.tag_name }}
+      tag_name: ${{ steps.release.outputs.tag_name || steps.batch_release.outputs.tag_name }}
+      prs: ${{ steps.batch.outputs.prs }}
     steps:
+      # A merge queue can land several PRs in one push, but the action only reads
+      # the labels of the head commit's PR. Take the highest bump across all of them.
+      - name: Find the PRs merged in this push
+        id: batch
+        if: github.event_name == 'push'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          retries: 3
+          script: |
+            const rank = { none: 0, patch: 1, minor: 2, major: 3 };
+            const bumpOf = (pr) => ['major', 'minor', 'patch']
+              .find((b) => pr.labels.some((l) => l.name === `release:${b}`)) ?? 'none';
+
+            let shas = [context.sha];
+            const { before, after } = context.payload;
+            if (before && !/^0+$/.test(before)) {
+              const { data } = await github.rest.repos.compareCommits({
+                ...context.repo, base: before, head: after,
+              });
+              shas = data.commits.map((c) => c.sha);
+            }
+
+            // Rebased stacked PRs also contain the merge commit, so match on merge_commit_sha.
+            const prs = [];
+            for (const sha of shas) {
+              const { data } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                ...context.repo, commit_sha: sha,
+              });
+              const pr = data.find((p) => p.merge_commit_sha === sha);
+              if (pr) prs.push({ number: pr.number, sha, bump: bumpOf(pr) });
+            }
+
+            const bump = prs.reduce((max, pr) => (rank[pr.bump] > rank[max] ? pr.bump : max), 'none');
+            const head = prs.find((pr) => pr.sha === context.sha)?.bump ?? 'none';
+            core.info(`PRs in push: ${prs.map((pr) => `#${pr.number} (${pr.bump})`).join(', ')}`);
+            core.setOutput('prs', JSON.stringify(prs.map((pr) => pr.number)));
+            core.setOutput('bump', bump);
+            core.setOutput('action_handles', String(head === bump));
+
       - name: Create release based on label
         id: release
+        if: github.event_name == 'pull_request' || steps.batch.outputs.action_handles == 'true'
         uses: step-security/release-on-push-action@b9dee0685e99e905fe90cba8ba9ed92c7f3806b4 # v0.28.6
         with:
           # On a PR the action looks up labels via the merge commit, which belongs to no
@@ -51,38 +92,73 @@ jobs:
               || (contains(github.event.pull_request.labels.*.name, 'release:minor') && 'minor')
               || 'patch' }}
           use_github_release_notes: true
-          dry_run: ${{ format('refs/heads/{0}', github.event.repository.default_branch) != github.ref }}
+          # Only a push to the default branch releases: a pull_request event on a merged PR reports github.ref as that branch.
+          dry_run: ${{ github.event_name != 'push' || format('refs/heads/{0}', github.event.repository.default_branch) != github.ref }}
+
+      # Same release the action would make (tag prefix `v`, "Version X" plus GitHub's notes),
+      # bumped by the highest label in the batch instead of the head commit's.
+      - name: Create release for a merge queue batch
+        id: batch_release
+        if: |-
+          github.event_name == 'push' &&
+          steps.batch.outputs.action_handles == 'false' &&
+          format('refs/heads/{0}', github.event.repository.default_branch) == github.ref
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          BUMP: ${{ steps.batch.outputs.bump }}
+        with:
+          retries: 3
+          script: |
+            let current = '0.0.0';
+            try {
+              const { data } = await github.rest.repos.getLatestRelease(context.repo);
+              current = data.tag_name.replace(/^[^\d]*/, '');
+            } catch (e) {
+              if (e.status !== 404) throw e;
+            }
+
+            const [major, minor, patch] = current.split('.').map(Number);
+            const version = {
+              major: `${major + 1}.0.0`,
+              minor: `${major}.${minor + 1}.0`,
+              patch: `${major}.${minor}.${patch + 1}`,
+            }[process.env.BUMP];
+            const tag = `v${version}`;
+
+            await github.rest.repos.createRelease({
+              ...context.repo,
+              tag_name: tag,
+              target_commitish: context.sha,
+              name: tag,
+              body: `Version ${version}\n\n`,
+              generate_release_notes: true,
+            });
+            core.info(`Released ${tag} (${process.env.BUMP}) at ${context.sha}`);
+            core.setOutput('tag_name', tag);
 
   comment_release:
     name: Comment release on merged PR
     needs: [release_on_push]
-    if: github.event_name == 'push' && needs.release_on_push.outputs.tag_name != ''
+    if: |-
+      github.event_name == 'push' &&
+      needs.release_on_push.outputs.tag_name != '' &&
+      needs.release_on_push.outputs.prs != '' &&
+      needs.release_on_push.outputs.prs != '[]'
     runs-on: generic-2-core
     timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: write
+    strategy:
+      matrix:
+        pr: ${{ fromJSON(needs.release_on_push.outputs.prs) }}
     steps:
-      - name: Find merged PR
-        id: pr
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          retries: 3
-          result-encoding: string
-          script: |
-            // Rebased stacked PRs also contain the merge commit, so match on merge_commit_sha.
-            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-              ...context.repo, commit_sha: context.sha,
-            });
-            return prs.find((p) => p.merge_commit_sha === context.sha)?.number ?? '';
-
       - name: Comment release link
-        if: steps.pr.outputs.result != ''
         uses: step-security/actions-comment-pull-request@60cd38988a354b2d22b47612fb02a20e822d6048 # v3.0.2
         with:
           comment-tag: release
           mode: upsert
-          pr-number: ${{ steps.pr.outputs.result }}
+          pr-number: ${{ matrix.pr }}
           message: |
             Released in [${{ needs.release_on_push.outputs.tag_name }}](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.release_on_push.outputs.tag_name }}).
 
