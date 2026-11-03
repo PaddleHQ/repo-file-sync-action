@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "lint": "eslint ./src",
+    "test": "node --test",
     "start": "node src/index.js",
     "build": "ncc build src/index.js -o dist -m --license licenses.txt"
   },
@@ -30,6 +31,7 @@
   "dependencies": {
     "@actions/core": "^2.0.1",
     "@actions/github": "^6.0.1",
+    "@octokit/plugin-retry": "^8.1.1",
     "@octokit/plugin-throttling": "^11.0.3",
     "@putout/git-status-porcelain": "^3.0.0",
     "action-input-parser": "^1.2.38",

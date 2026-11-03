@@ -2,6 +2,8 @@ import * as core from '@actions/core'
 import * as fs from 'fs'
 
 import Git from './git.js'
+import { createGithubClient } from './github-client.js'
+import { runPool } from './pool.js'
 import { forEach, dedent, addTrailingSlash, pathIsDirectory, copy, remove, arrayEquals } from './helpers.js'
 
 import { parseConfig, default as config } from './config.js'
@@ -22,236 +24,263 @@ const {
 	REVIEWERS,
 	TEAM_REVIEWERS,
 	GITHUB_REPOSITORY,
+	GITHUB_TOKEN,
 	AUTOMERGE,
-	AUTOMERGE_METHOD
+	AUTOMERGE_METHOD,
+	CONCURRENCY,
+	MAX_RETRIES
 } = config
 
-async function run() {
-	// Reuse octokit for each repo
-	const git = new Git()
+async function syncRepo(client, item) {
+	const git = new Git(client, item.branchSuffix)
 
-	const repos = await parseConfig()
+	core.info(`Repository Info`)
+	core.info(`Target Repo		: ${ item.repo.user }/${ item.repo.name }`)
+	core.info(`Target Url		: https://${ item.repo.fullName }`)
+	core.info(`Source Branch		: ${ item.repo.branch }`)
+	core.info(`Target Branch Suffix	: ${ item.branchSuffix || 'n/a' }`)
+	core.info('	')
 
-	const prUrls = []
+	try {
+		let prUrl
 
-	await forEach(repos, async (item) => {
-		core.info(`Repository Info`)
-		core.info(`Target Repo		: ${ item.repo.user }/${ item.repo.name }`)
-		core.info(`Target Url		: https://${ item.repo.fullName }`)
-		core.info(`Source Branch		: ${ item.repo.branch }`)
-		core.info(`Target Branch Suffix	: ${ item.branchSuffix || 'n/a' }`)
-		core.info('	')
-		try {
+		// Clone and setup the git repository locally
+		await git.initRepo(item.repo)
 
-			// Clone and setup the git repository locally
-			await git.initRepo(item.repo)
+		let existingPr
+		if (SKIP_PR === false) {
+			await git.createPrBranch(item.branchSuffix)
 
-			let existingPr
-			if (SKIP_PR === false) {
-				await git.createPrBranch(item.branchSuffix)
+			// Check for existing PR and add warning message that the PR maybe about to change
+			existingPr = OVERWRITE_EXISTING_PR ? await git.findExistingPr() : undefined
+			if (existingPr && DRY_RUN === false) {
+				core.info(`Found existing PR ${ existingPr.number }`)
+				await git.setPrWarning()
+			}
+		}
 
-				// Check for existing PR and add warning message that the PR maybe about to change
-				existingPr = OVERWRITE_EXISTING_PR ? await git.findExistingPr() : undefined
-				if (existingPr && DRY_RUN === false) {
-					core.info(`Found existing PR ${ existingPr.number }`)
-					await git.setPrWarning()
+		core.info(`Locally syncing file(s) between source and target repository`)
+		const modified = []
+
+		// Loop through all selected files of the source repo
+		await forEach(item.files, async (file) => {
+			const fileExists = fs.existsSync(file.source)
+
+			const localDestination = `${ git.workingDir }/${ file.dest }`
+			const destExists = fs.existsSync(localDestination)
+			let isDirectory
+
+			if (fileExists === false) {
+				// if there is no local file, then we assume it's not a directory
+				isDirectory = false
+
+				if (!file.deleteOrphaned) {
+					return core.warning(`Source ${ file.source } not found`)
 				}
+
+				if (destExists === true) {
+					await git.remove(file.dest)
+				}
+			} else {
+				isDirectory = await pathIsDirectory(file.source)
+
+				const source = isDirectory ? `${ addTrailingSlash(file.source) }` : file.source
+				const dest = isDirectory ? `${ addTrailingSlash(localDestination) }` : localDestination
+
+				if (isDirectory) core.info(`Source is directory`)
+
+				await copy(source, dest, isDirectory, file)
+
+				await git.add(file.dest)
 			}
 
-			core.info(`Locally syncing file(s) between source and target repository`)
-			const modified = []
+			// Commit each file separately, if option is set to false commit all files at once later
+			if (COMMIT_EACH_FILE === true) {
+				const hasChanges = await git.hasChanges()
 
-			// Loop through all selected files of the source repo
-			await forEach(item.files, async (file) => {
-				const fileExists = fs.existsSync(file.source)
+				if (hasChanges === false) return core.debug('File(s) already up to date')
 
-				const localDestination = `${ git.workingDir }/${ file.dest }`
-				const destExists = fs.existsSync(localDestination)
-				let isDirectory
+				core.debug(`Creating commit for file(s) ${ file.dest }`)
 
-				if (fileExists === false) {
-					// if there is no local file, then we assume it's not a directory
-					isDirectory = false
+				// Use different commit/pr message based on if the source is a directory or file
+				const directory = isDirectory ? 'directory' : ''
+				const otherFiles = isDirectory ? 'and copied all sub files/folders' : ''
+				const useOriginalCommitMessage = ORIGINAL_MESSAGE && git.isOneCommitPush() && arrayEquals(await git.getChangesFromLastCommit(file.source), await git.changes(file.dest))
 
-					if (!file.deleteOrphaned) {
-						return core.warning(`Source ${ file.source } not found`)
+				const message = {
+					true: {
+						commit: useOriginalCommitMessage ? git.originalCommitMessage() : `${ COMMIT_PREFIX } synced local '${ file.dest }' with remote '${ file.source }'`,
+						pr: `synced local ${ directory } <code>${ file.dest }</code> with remote ${ directory } <code>${ file.source }</code>`
+					},
+					false: {
+						commit: useOriginalCommitMessage ? git.originalCommitMessage() : `${ COMMIT_PREFIX } created local '${ file.dest }' from remote '${ file.source }'`,
+						pr: `created local ${ directory } <code>${ file.dest }</code> ${ otherFiles } from remote ${ directory } <code>${ file.source }</code>`
 					}
-
-					if (destExists === true) {
-						await git.remove(file.dest)
-					}
-				} else {
-					isDirectory = await pathIsDirectory(file.source)
-
-					const source = isDirectory ? `${ addTrailingSlash(file.source) }` : file.source
-					const dest = isDirectory ? `${ addTrailingSlash(localDestination) }` : localDestination
-
-					if (isDirectory) core.info(`Source is directory`)
-
-					await copy(source, dest, isDirectory, file)
-
-					await git.add(file.dest)
 				}
 
-				// Commit each file separately, if option is set to false commit all files at once later
-				if (COMMIT_EACH_FILE === true) {
-					const hasChanges = await git.hasChanges()
-
-					if (hasChanges === false) return core.debug('File(s) already up to date')
-
-					core.debug(`Creating commit for file(s) ${ file.dest }`)
-
-					// Use different commit/pr message based on if the source is a directory or file
-					const directory = isDirectory ? 'directory' : ''
-					const otherFiles = isDirectory ? 'and copied all sub files/folders' : ''
-					const useOriginalCommitMessage = ORIGINAL_MESSAGE && git.isOneCommitPush() && arrayEquals(await git.getChangesFromLastCommit(file.source), await git.changes(file.dest))
-
-					const message = {
-						true: {
-							commit: useOriginalCommitMessage ? git.originalCommitMessage() : `${ COMMIT_PREFIX } synced local '${ file.dest }' with remote '${ file.source }'`,
-							pr: `synced local ${ directory } <code>${ file.dest }</code> with remote ${ directory } <code>${ file.source }</code>`
-						},
-						false: {
-							commit: useOriginalCommitMessage ? git.originalCommitMessage() : `${ COMMIT_PREFIX } created local '${ file.dest }' from remote '${ file.source }'`,
-							pr: `created local ${ directory } <code>${ file.dest }</code> ${ otherFiles } from remote ${ directory } <code>${ file.source }</code>`
-						}
-					}
-
-					// Commit and add file to modified array so we later know if there are any changes to actually push
-					await git.commit(message[destExists].commit)
-					modified.push({
-						dest: file.dest,
-						source: file.source,
-						message: message[destExists].pr,
-						useOriginalMessage: useOriginalCommitMessage,
-						commitMessage: message[destExists].commit
-					})
-				}
-			})
-
-			if (DRY_RUN) {
-				core.warning('Dry run, no changes will be pushed')
-
-				core.debug('Git Status:')
-				core.debug(await git.status())
-
-				await git.cleanupRepo(item.repo)
-
-				return
-			}
-
-			const hasChanges = await git.hasChanges()
-
-			// If no changes left and nothing was modified we can assume nothing has changed/needs to be pushed
-			if (hasChanges === false && modified.length < 1) {
-				core.info('File(s) already up to date')
-
-				if (existingPr) await git.removePrWarning()
-
-				await git.cleanupRepo(item.repo)
-
-				return
-			}
-
-			// If there are still local changes left (i.e. not committed each file separately), commit them before pushing
-			if (hasChanges === true) {
-				core.debug(`Creating commit for remaining files`)
-
-				let useOriginalCommitMessage = ORIGINAL_MESSAGE && git.isOneCommitPush()
-				if (useOriginalCommitMessage) {
-					await forEach(item.files, async (file) => {
-						useOriginalCommitMessage = useOriginalCommitMessage && arrayEquals(await git.getChangesFromLastCommit(file.source), await git.changes(file.dest))
-					})
-				}
-
-				const commitMessage = useOriginalCommitMessage ? git.originalCommitMessage() : undefined
-				await git.commit(commitMessage)
+				// Commit and add file to modified array so we later know if there are any changes to actually push
+				await git.commit(message[destExists].commit)
 				modified.push({
-					dest: git.workingDir,
+					dest: file.dest,
+					source: file.source,
+					message: message[destExists].pr,
 					useOriginalMessage: useOriginalCommitMessage,
-					commitMessage: commitMessage
+					commitMessage: message[destExists].commit
 				})
 			}
+		})
 
-			core.info(`Pushing changes to target repository`)
-			await git.push()
+		if (DRY_RUN) {
+			core.warning('Dry run, no changes will be pushed')
 
-			if (SKIP_PR === false) {
-				// If each file was committed separately, list them in the PR description
-				const changedFiles = dedent(`
-					<details>
-					<summary>Changed files</summary>
-					<ul>
-					${ modified.map((file) => `<li>${ file.message }</li>`).join('') }
-					</ul>
-					</details>
-				`)
-
-				const useCommitAsPRTitle = COMMIT_AS_PR_TITLE && modified.length === 1 && modified[0].useOriginalMessage
-
-				let title
-				if (useCommitAsPRTitle) {
-					title = modified[0].commitMessage.split('\n', 1)[0].trim()
-				} else {
-					title = `${ COMMIT_PREFIX } synced file(s) with ${ GITHUB_REPOSITORY }`
-				}
-
-				if (item.branchSuffix !== undefined && item.branchSuffix !== '') {
-					title += ` [${ item.branchSuffix }] `
-				}
-
-				const pullRequest = await git.createOrUpdatePr(COMMIT_EACH_FILE ? changedFiles : '', title)
-
-				core.notice(`Pull Request #${ pullRequest.number } created/updated: ${ pullRequest.html_url }`)
-				prUrls.push(pullRequest.html_url)
-
-				if (PR_LABELS !== undefined && PR_LABELS.length > 0 && !FORK) {
-					core.info(`Adding label(s) "${ PR_LABELS.join(', ') }" to PR`)
-					await git.addPrLabels(PR_LABELS)
-				}
-
-				if (ASSIGNEES !== undefined && ASSIGNEES.length > 0 && !FORK) {
-					core.info(`Adding assignee(s) "${ ASSIGNEES.join(', ') }" to PR`)
-					await git.addPrAssignees(ASSIGNEES)
-				}
-
-				if (REVIEWERS !== undefined && REVIEWERS.length > 0 && !FORK) {
-					core.info(`Adding reviewer(s) "${ REVIEWERS.join(', ') }" to PR`)
-					await git.addPrReviewers(REVIEWERS)
-				}
-
-				if (TEAM_REVIEWERS !== undefined && TEAM_REVIEWERS.length > 0 && !FORK) {
-					core.info(`Adding team reviewer(s) "${ TEAM_REVIEWERS.join(', ') }" to PR`)
-					await git.addPrTeamReviewers(TEAM_REVIEWERS)
-				}
-
-				if (AUTOMERGE && !FORK) {
-					core.info(`Enabling auto-merge (${ AUTOMERGE_METHOD }) on PR`)
-					await git.enableAutoMerge(AUTOMERGE_METHOD)
-				}
-			}
+			core.debug('Git Status:')
+			core.debug(await git.status())
 
 			await git.cleanupRepo(item.repo)
 
-			core.info('	')
-		} catch (err) {
-			core.setFailed(err.message)
-			core.debug(err)
+			return { repo: item.repo, status: 'skipped' }
 		}
+
+		const hasChanges = await git.hasChanges()
+
+		// If no changes left and nothing was modified we can assume nothing has changed/needs to be pushed
+		if (hasChanges === false && modified.length < 1) {
+			core.info('File(s) already up to date')
+
+			if (existingPr) await git.removePrWarning()
+
+			await git.cleanupRepo(item.repo)
+
+			return { repo: item.repo, status: 'up-to-date' }
+		}
+
+		// If there are still local changes left (i.e. not committed each file separately), commit them before pushing
+		if (hasChanges === true) {
+			core.debug(`Creating commit for remaining files`)
+
+			let useOriginalCommitMessage = ORIGINAL_MESSAGE && git.isOneCommitPush()
+			if (useOriginalCommitMessage) {
+				await forEach(item.files, async (file) => {
+					useOriginalCommitMessage = useOriginalCommitMessage && arrayEquals(await git.getChangesFromLastCommit(file.source), await git.changes(file.dest))
+				})
+			}
+
+			const commitMessage = useOriginalCommitMessage ? git.originalCommitMessage() : undefined
+			await git.commit(commitMessage)
+			modified.push({
+				dest: git.workingDir,
+				useOriginalMessage: useOriginalCommitMessage,
+				commitMessage: commitMessage
+			})
+		}
+
+		core.info(`Pushing changes to target repository`)
+		await git.push()
+
+		if (SKIP_PR === false) {
+			// If each file was committed separately, list them in the PR description
+			const changedFiles = dedent(`
+				<details>
+				<summary>Changed files</summary>
+				<ul>
+				${ modified.map((file) => `<li>${ file.message }</li>`).join('') }
+				</ul>
+				</details>
+			`)
+
+			const useCommitAsPRTitle = COMMIT_AS_PR_TITLE && modified.length === 1 && modified[0].useOriginalMessage
+
+			let title
+			if (useCommitAsPRTitle) {
+				title = modified[0].commitMessage.split('\n', 1)[0].trim()
+			} else {
+				title = `${ COMMIT_PREFIX } synced file(s) with ${ GITHUB_REPOSITORY }`
+			}
+
+			if (item.branchSuffix !== undefined && item.branchSuffix !== '') {
+				title += ` [${ item.branchSuffix }] `
+			}
+
+			const pullRequest = await git.createOrUpdatePr(COMMIT_EACH_FILE ? changedFiles : '', title)
+
+			core.notice(`Pull Request #${ pullRequest.number } created/updated: ${ pullRequest.html_url }`)
+			prUrl = pullRequest.html_url
+
+			if (PR_LABELS !== undefined && PR_LABELS.length > 0 && !FORK) {
+				core.info(`Adding label(s) "${ PR_LABELS.join(', ') }" to PR`)
+				await git.addPrLabels(PR_LABELS)
+			}
+
+			if (ASSIGNEES !== undefined && ASSIGNEES.length > 0 && !FORK) {
+				core.info(`Adding assignee(s) "${ ASSIGNEES.join(', ') }" to PR`)
+				await git.addPrAssignees(ASSIGNEES)
+			}
+
+			if (REVIEWERS !== undefined && REVIEWERS.length > 0 && !FORK) {
+				core.info(`Adding reviewer(s) "${ REVIEWERS.join(', ') }" to PR`)
+				await git.addPrReviewers(REVIEWERS)
+			}
+
+			if (TEAM_REVIEWERS !== undefined && TEAM_REVIEWERS.length > 0 && !FORK) {
+				core.info(`Adding team reviewer(s) "${ TEAM_REVIEWERS.join(', ') }" to PR`)
+				await git.addPrTeamReviewers(TEAM_REVIEWERS)
+			}
+
+			if (AUTOMERGE && !FORK) {
+				core.info(`Enabling auto-merge (${ AUTOMERGE_METHOD }) on PR`)
+				await git.enableAutoMerge(AUTOMERGE_METHOD)
+			}
+		}
+
+		await git.cleanupRepo(item.repo)
+
+		core.info('	')
+
+		return { repo: item.repo, status: 'synced', prUrl }
+	} catch (err) {
+		core.warning(`Failed to sync ${ item.repo.fullName }: ${ err.message }`)
+		core.debug(err)
+		return { repo: item.repo, status: 'failed', error: err.message }
+	}
+}
+
+async function run() {
+	// One shared client so concurrent repos funnel every API call through a single throttle queue
+	const client = createGithubClient({
+		token: GITHUB_TOKEN,
+		baseUrl: process.env.GITHUB_API_URL,
+		maxRetries: MAX_RETRIES
 	})
 
-	// If we created any PRs, set their URLs as the output
-	if (prUrls) {
-		core.setOutput('pull_request_urls', prUrls)
+	const repos = await parseConfig()
+
+	core.info(`Syncing ${ repos.length } repositories with concurrency ${ CONCURRENCY }`)
+
+	const results = await runPool(repos, CONCURRENCY, (item) => syncRepo(client, item))
+
+	const prUrls = results.filter((r) => r.prUrl).map((r) => r.prUrl)
+	const failed = results.filter((r) => r.status === 'failed')
+
+	core.startGroup('Sync summary')
+	for (const r of results) {
+		core.info(`${ r.status.padEnd(12) } ${ r.repo.fullName }${ r.error ? ` — ${ r.error }` : '' }`)
 	}
+	core.endGroup()
+	core.info(`Synced: ${ results.filter((r) => r.status === 'synced').length }, up-to-date: ${ results.filter((r) => r.status === 'up-to-date').length }, skipped: ${ results.filter((r) => r.status === 'skipped').length }, failed: ${ failed.length }`)
+
+	core.setOutput('pull_request_urls', prUrls)
+	core.setOutput('failed_repos', failed.map((r) => r.repo.fullName))
 
 	if (SKIP_CLEANUP === true) {
 		core.info('Skipping cleanup')
-		return
+	} else {
+		await remove(TMP_DIR)
+		core.info('Cleanup complete')
 	}
 
-	await remove(TMP_DIR)
-	core.info('Cleanup complete')
+	if (failed.length > 0) {
+		core.setFailed(`${ failed.length } repository(ies) failed to sync: ${ failed.map((r) => r.repo.fullName).join(', ') }`)
+	}
 }
 
 run()

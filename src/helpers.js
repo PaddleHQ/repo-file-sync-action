@@ -6,6 +6,8 @@ import nunjucks from 'nunjucks'
 
 nunjucks.configure({ autoescape: true, trimBlocks: true, lstripBlocks: true })
 
+const EXEC_TIMEOUT_MS = 5 * 60 * 1000
+
 // From https://github.com/toniov/p-iteration/blob/master/lib/static-methods.js - MIT © Antonio V
 export async function forEach(array, callback) {
 	for (let index = 0; index < array.length; index++) {
@@ -46,7 +48,8 @@ export function execCmd(command, workingDir, trimResult = true) {
 			command,
 			{
 				cwd: workingDir,
-				maxBuffer: 1024 * 1024 * 20
+				maxBuffer: 1024 * 1024 * 20,
+				timeout: EXEC_TIMEOUT_MS
 			},
 			function(error, stdout) {
 				error ? reject(error) : resolve(
@@ -79,6 +82,13 @@ export function execCmdBuffer(command, workingDir) {
 
 export function addTrailingSlash(str) {
 	return str.endsWith('/') ? str : str + '/'
+}
+
+// Unique working dir per work item so concurrent syncs of the same repo on
+// different branch suffixes don't clone into the same directory.
+export function repoWorkingDir(tmpDir, uniqueName, branchSuffix) {
+	const suffix = branchSuffix ? `~${ branchSuffix }` : ''
+	return path.join(tmpDir, uniqueName + suffix)
 }
 
 export async function pathIsDirectory(path) {

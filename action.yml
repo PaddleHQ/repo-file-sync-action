@@ -111,10 +111,24 @@ inputs:
     description: |
       Merge method to request when AUTOMERGE is enabled: merge, squash, or rebase. Defaults to squash.
     required: false
+  CONCURRENCY:
+    description: |
+      How many target repositories to sync in parallel. Defaults to 1 (sequential, the historical
+      behaviour). All API calls still funnel through a single shared throttle queue, so raising this
+      parallelises local git work while keeping API pressure rate-safe. Recommended range 4-8 for
+      large fan-outs.
+    required: false
+  MAX_RETRIES:
+    description: |
+      Maximum retry attempts for transient failures (5xx, network resets, timeouts, and GitHub rate
+      limits) on both git operations and GitHub API calls. Defaults to 3.
+    required: false
 
 outputs:
   pull_request_urls:
     description: 'The URLs to the created Pull Requests as an array'
+  failed_repos:
+    description: 'Full names of repositories that failed to sync after retries, as an array'
 
 runs:
   using: 'node20'
