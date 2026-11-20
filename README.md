@@ -123,7 +123,7 @@ Here are all the inputs [repo-file-sync-action](https://github.com/BetaHuhn/repo
 | `OVERWRITE_EXISTING_PR` | Overwrite any existing Sync PR with the new changes | **No** | true |
 | `BRANCH_PREFIX` | Specify a different prefix for the new branch in the target repo | **No** | repo-sync/SOURCE_REPO_NAME |
 | `TMP_DIR` | The working directory where all git operations will be done | **No** | tmp-${ Date.now().toString() } |
-| `DRY_RUN` | Run everything except that nothing will be pushed | **No** | false |
+| `DRY_RUN` | Run everything except that nothing will be pushed. A run that isn't a `push`, `schedule` or `workflow_dispatch` on the repository's default branch is always a dry run, whatever this says | **No** | false |
 | `SKIP_CLEANUP` | Skips removing the temporary directory. Useful for debugging | **No** | false |
 | `SKIP_PR` | Skips creating a Pull Request and pushes directly to the default branch | **No** | false |
 | `FORK` | A Github account username. Changes will be pushed to a fork of target repos on this account. | **No** | false |

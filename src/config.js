@@ -1,8 +1,11 @@
 import * as core from '@actions/core'
+import * as github from '@actions/github'
 import * as yaml from 'js-yaml'
 import fs from 'fs-extra'
 import * as path from 'path'
 import { getInput } from 'action-input-parser'
+
+import { realSyncBlocker } from './dryrun.js'
 
 const REPLACE_DEFAULT = true
 const TEMPLATE_DEFAULT = false
@@ -149,6 +152,19 @@ try {
 	}
 
 	core.setSecret(context.GITHUB_TOKEN)
+
+	if (context.DRY_RUN === false) {
+		const blocker = realSyncBlocker({
+			ref: github.context.ref,
+			eventName: github.context.eventName,
+			defaultBranch: github.context.payload.repository?.default_branch
+		})
+
+		if (blocker) {
+			core.warning(`DRY_RUN is false, but this is a dry run because ${ blocker }. Only a push, scheduled or manual run on the default branch syncs.`)
+			context.DRY_RUN = true
+		}
+	}
 
 	core.debug(JSON.stringify(context, null, 2))
 
