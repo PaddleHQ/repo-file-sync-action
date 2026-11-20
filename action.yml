@@ -69,7 +69,8 @@ inputs:
     required: false
   DRY_RUN:
     description: |
-      Run everything except for nothing will be updated. Defaults to false
+      Run everything except for nothing will be updated. Defaults to false. A run that isn't a push, schedule or
+      workflow_dispatch on the repository's default branch is always a dry run, whatever this says.
     required: false
   SKIP_CLEANUP:
     description: |
