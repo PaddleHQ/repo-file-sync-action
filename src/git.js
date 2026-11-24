@@ -108,7 +108,8 @@ export default class Git {
 		core.debug(`Cloning ${ this.repo.fullName } into ${ this.workingDir }`)
 
 		return execCmd(
-			`git clone --depth 1 ${ this.repo.branch !== 'default' ? '--branch "' + this.repo.branch + '"' : '' } ${ this.gitUrl } ${ this.workingDir }`
+			// No auto-gc: a detached gc after fetch races cleanupRepo's rm -rf.
+			`git clone -c gc.auto=0 -c maintenance.auto=false --depth 1 ${ this.repo.branch !== 'default' ? '--branch "' + this.repo.branch + '"' : '' } ${ this.gitUrl } ${ this.workingDir }`
 		)
 	}
 
